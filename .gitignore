@@ -1,0 +1,14 @@
+# Sample libraries are large; see samples/README.md for how to fetch them.
+samples/SalamanderGrandPiano/
+samples/SplendidGrandPiano/
+
+# Rendered audio and intermediate takes
+work/*.wav
+work/*.mid
+
+# Learned profiles are per-player
+profiles/*.json
+
+__pycache__/
+*.pyc
+.DS_Store
