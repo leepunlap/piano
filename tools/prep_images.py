@@ -247,10 +247,21 @@ def main() -> int:
     ap.add_argument("--border", type=int, default=40)
     ap.add_argument("--no-deskew", action="store_true")
     ap.add_argument("--report", type=Path)
+    ap.add_argument("--only", help="prepare just this page, not the whole folder")
     args = ap.parse_args()
 
     args.outdir.mkdir(parents=True, exist_ok=True)
     images = sorted(p for p in args.indir.iterdir() if p.suffix.lower() in {".png", ".jpg", ".jpeg"})
+    if args.only:
+        # Just one page: the pipeline tries a page at a few scales and only
+        # wants the one it is working on.
+        images = [p for p in images if p.stem == args.only]
+        if not images:
+            images = sorted(
+                p for p in args.indir.iterdir()
+                if p.suffix.lower() in {".png", ".jpg", ".jpeg"}
+                and p.stem.startswith(args.only)
+            )
     if not images:
         print(f"no images in {args.indir}", file=sys.stderr)
         return 1
