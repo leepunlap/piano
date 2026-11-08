@@ -1,0 +1,19 @@
+#!/bin/bash
+# Audiveris CLI wrapper (headless batch mode).
+# The bundled macOS app has no console entry point, so we drive the jar directly
+# with the JRE the app ships.
+set -euo pipefail
+
+APP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/Audiveris.app/Contents"
+JAVA="$APP/runtime/Contents/Home/bin/java"
+
+exec "$JAVA" \
+  -Dapple.awt.graphics.UseQuartz=false \
+  -Djava.awt.headless=true \
+  -Dfile.encoding=UTF-8 \
+  -Dsun.java2d.uiScale=1.0 \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  --add-opens=java.base/java.util=ALL-UNNAMED \
+  --add-opens=java.desktop/java.awt=ALL-UNNAMED \
+  -cp "$APP/app/*" \
+  org.audiveris.omr.Main "$@"

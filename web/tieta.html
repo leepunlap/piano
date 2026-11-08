@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-HK"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>鐵塔凌雲 · 練習</title>
+<style>
+:root {
+  --ink: #14110e;
+  --paper: #fbf8f2;
+  --rule: #ddd5c6;
+  --accent: #8c2f39;
+  --muted: #6d6459;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 "Iowan Old Style", "Palatino Linotype", Palatino, "Songti TC", serif;
+}
+header {
+  padding: 28px 32px 18px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+h1 { font-size: 26px; margin: 0; letter-spacing: .02em; }
+.sub { color: var(--muted); font-size: 14px; }
+main { padding: 24px 32px 64px; }
+a { color: var(--accent); }
+.back { text-decoration: none; font-size: 14px; color: var(--muted); }
+
+.controls {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 22px; flex-wrap: wrap;
+}
+button {
+  font: inherit; font-size: 15px;
+  background: var(--ink); color: var(--paper);
+  border: 0; border-radius: 2px; padding: 9px 20px; cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+button:disabled { opacity: .4; cursor: default; }
+.tempo { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.tempo input { width: 120px; }
+
+.system {
+  position: relative;
+  margin: 0 0 6px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 6px;
+}
+.system img { display: block; width: 100%; height: auto; }
+.hit {
+  position: absolute; top: 0; bottom: 0; width: 3px;
+  background: var(--accent);
+  opacity: 0; transition: opacity .12s;
+  pointer-events: none;
+}
+.hit.on { opacity: .85; }
+
+.chords { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.chords b { color: var(--accent); font-weight: 600; }
+
+.legend { margin-top: 28px; font-size: 13px; color: var(--muted); max-width: 60ch; }
+</style></head><body>
+<header><a class="back" href="index.html">← 全部曲目</a>
+<h1>鐵塔凌雲</h1>
+<span class="sub">♩ = 97 · 9 行 · 139 個音符</span>
+</header><main>
+<div class="controls"><button id="play">▶ 播放</button><button id="stop" class="ghost">■ 停止</button><span class="tempo">速度 <input id="rate" type="range" min="50" max="140" value="97"> <b id="rateval">97</b></span></div>
+<div class="system" data-page="page-1" data-system="1">
+<img src="strips/page-1-sys01.png" alt="system 1">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-1" data-system="2">
+<img src="strips/page-1-sys02.png" alt="system 2">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-1" data-system="3">
+<img src="strips/page-1-sys03.png" alt="system 3">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-1" data-system="4">
+<img src="strips/page-1-sys04.png" alt="system 4">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-2" data-system="1">
+<img src="strips/page-2-sys01.png" alt="system 1">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-2" data-system="2">
+<img src="strips/page-2-sys02.png" alt="system 2">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-2" data-system="3">
+<img src="strips/page-2-sys03.png" alt="system 3">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-3" data-system="1">
+<img src="strips/page-3-sys01.png" alt="system 1">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-3" data-system="2">
+<img src="strips/page-3-sys02.png" alt="system 2">
+<div class="hit"></div>
+</div>
+<p class="legend">樂譜為掃描原稿清理後的影像，和弦與歌詞保留在譜面之上與之下；播放的是從譜面讀出的旋律。</p>
+</main>
+<script>const SONG = {"bpm": 97, "marks": [{"page": "page-1", "system": 1, "left": 31.990679094540614, "beat": 3.8607, "pitch": "G5"}, {"page": "page-1", "system": 1, "left": 83.58854860186418, "beat": 23.7368, "pitch": "D5"}, {"page": "page-1", "system": 1, "left": 97.70306258322238, "beat": 39.9247, "pitch": "G4"}, {"page": "page-1", "system": 1, "left": 97.86950732356857, "beat": 39.9785, "pitch": "A4"}, {"page": "page-1", "system": 2, "left": 25.365853658536587, "beat": 40.43, "pitch": "F5"}, {"page": "page-1", "system": 2, "left": 76.99186991869918, "beat": 45.3314, "pitch": "F5"}, {"page": "page-1", "system": 2, "left": 83.2520325203252, "beat": 46.2467, "pitch": "F5"}, {"page": "page-1", "system": 3, "left": 24.745237040319008, "beat": 49.8975, "pitch": "F5"}, {"page": "page-1", "system": 3, "left": 39.964554718653076, "beat": 52.044, "pitch": "D5"}, {"page": "page-1", "system": 3, "left": 62.339388568896766, "beat": 56.3125, "pitch": "C5"}, {"page": "page-1", "system": 3, "left": 64.64333185644661, "beat": 56.608, "pitch": "F5"}, {"page": "page-1", "system": 3, "left": 70.31457687195392, "beat": 57.3352, "pitch": "F5"}, {"page": "page-1", "system": 3, "left": 78.35622507753655, "beat": 58.3665, "pitch": "F5"}, {"page": "page-1", "system": 3, "left": 94.7718210013292, "beat": 64.2273, "pitch": "F5"}, {"page": "page-1", "system": 4, "left": 13.885809312638582, "beat": 68.0, "pitch": "D5"}, {"page": "page-1", "system": 4, "left": 53.38137472283814, "beat": 76.6607, "pitch": "A4"}, {"page": "page-1", "system": 4, "left": 53.79711751662971, "beat": 76.6964, "pitch": "F5"}, {"page": "page-1", "system": 4, "left": 57.17849223946785, "beat": 76.9863, "pitch": "B5"}, {"page": "page-1", "system": 4, "left": 82.28935698447894, "beat": 79.1396, "pitch": "G5"}, {"page": "page-2", "system": 1, "left": 29.855167873601054, "beat": 9.9924, "pitch": "E5"}, {"page": "page-2", "system": 1, "left": 29.92100065832785, "beat": 10.0076, "pitch": "B4"}, {"page": "page-2", "system": 1, "left": 41.17840684660961, "beat": 15.5217, "pitch": "G4"}, {"page": "page-2", "system": 1, "left": 41.244239631336406, "beat": 15.6087, "pitch": "D5"}, {"page": "page-2", "system": 1, "left": 41.44173798551679, "beat": 15.8696, "pitch": "B4"}, {"page": "page-2", "system": 1, "left": 41.573403554970376, "beat": 16.011, "pitch": "F4"}, {"page": "page-2", "system": 1, "left": 57.867017774851874, "beat": 22.129, "pitch": "D5"}, {"page": "page-2", "system": 1, "left": 85.45095457537853, "beat": 43.3898, "pitch": "E4"}, {"page": "page-2", "system": 1, "left": 89.66425279789335, "beat": 49.1429, "pitch": "A4"}, {"page": "page-2", "system": 2, "left": 46.22641509433962, "beat": 57.8901, "pitch": "D5"}, {"page": "page-2", "system": 2, "left": 49.410377358490564, "beat": 60.1333, "pitch": "E5"}, {"page": "page-2", "system": 2, "left": 49.85259433962264, "beat": 60.3, "pitch": "D5"}, {"page": "page-2", "system": 2, "left": 50.117924528301884, "beat": 60.4, "pitch": "F5"}, {"page": "page-2", "system": 2, "left": 60.14150943396226, "beat": 68.0678, "pitch": "F5"}, {"page": "page-2", "system": 2, "left": 60.87853773584906, "beat": 68.2797, "pitch": "G5"}, {"page": "page-2", "system": 2, "left": 67.33490566037736, "beat": 70.1356, "pitch": "G4"}, {"page": "page-2", "system": 2, "left": 68.0129716981132, "beat": 70.3305, "pitch": "A4"}, {"page": "page-2", "system": 2, "left": 90.50707547169812, "beat": 74.7509, "pitch": "E5"}, {"page": "page-2", "system": 2, "left": 94.28066037735849, "beat": 75.373, "pitch": "D5"}, {"page": "page-2", "system": 2, "left": 97.46462264150944, "beat": 75.8979, "pitch": "A4"}, {"page": "page-2", "system": 3, "left": 24.46420428636571, "beat": 76.9105, "pitch": "D5"}, {"page": "page-2", "system": 3, "left": 34.906520747834016, "beat": 77.6113, "pitch": "E4"}, {"page": "page-2", "system": 3, "left": 70.4514363885089, "beat": 79.9969, "pitch": "B4"}, {"page": "page-3", "system": 1, "left": 11.919748229740362, "beat": 0.0, "pitch": "D5"}, {"page": "page-3", "system": 1, "left": 24.980330448465775, "beat": 2.9123, "pitch": "G4"}, {"page": "page-3", "system": 1, "left": 25.59008654602675, "beat": 3.0482, "pitch": "A4"}, {"page": "page-3", "system": 1, "left": 39.79150275373721, "beat": 5.709, "pitch": "F5"}, {"page": "page-3", "system": 1, "left": 71.10542879622345, "beat": 11.1175, "pitch": "G4"}, {"page": "page-3", "system": 1, "left": 71.26278520849725, "beat": 11.1448, "pitch": "A4"}, {"page": "page-3", "system": 1, "left": 71.73485444531865, "beat": 11.2266, "pitch": "A4"}, {"page": "page-3", "system": 1, "left": 79.81904012588512, "beat": 13.8728, "pitch": "G4"}, {"page": "page-3", "system": 2, "left": 10.247208931419458, "beat": 16.1189, "pitch": "G4"}, {"page": "page-3", "system": 2, "left": 54.047049441786285, "beat": 26.1429, "pitch": "A4"}, {"page": "page-3", "system": 2, "left": 57.31658692185008, "beat": 39.9104, "pitch": "B4"}, {"page": "page-3", "system": 2, "left": 57.31658692185008, "beat": 39.9104, "pitch": "G4"}, {"page": "page-3", "system": 2, "left": 70.69377990430623, "beat": 41.2883, "pitch": "G4"}, {"page": "page-3", "system": 2, "left": 76.2360446570973, "beat": 41.8245, "pitch": "D5"}, {"page": "page-3", "system": 2, "left": 79.10685805422648, "beat": 42.1022, "pitch": "C5"}, {"page": "page-3", "system": 2, "left": 87.8987240829346, "beat": 42.9527, "pitch": "G4"}, {"page": "page-3", "system": 2, "left": 99.02312599681021, "beat": 46.1429, "pitch": "C5"}, {"page": "page-3", "system": 2, "left": 99.40191387559808, "beat": 50.4, "pitch": "D5"}], "audio": "audio/tieta.wav"};</script>
+
+<script>
+const audio = document.getElementById('play') ? new Audio(SONG.audio) : null;
+const playBtn = document.getElementById('play');
+const stopBtn = document.getElementById('stop');
+const rate = document.getElementById('rate');
+const rateVal = document.getElementById('rateval');
+const systems = Array.from(document.querySelectorAll('.system'));
+const hits = systems.map(s => s.querySelector('.hit'));
+
+if (rate) {
+  rate.addEventListener('input', () => {
+    rateVal.textContent = rate.value;
+    if (audio) audio.playbackRate = SONG.bpm / Number(rate.value);
+  });
+}
+
+function markAt(beat) {
+  // Which system and where on it the music has reached.
+  let best = null;
+  for (const m of SONG.marks) {
+    if (m.beat <= beat + 0.05) best = m;
+    else break;
+  }
+  hits.forEach(h => h.classList.remove('on'));
+  if (!best) return;
+  const index = systems.findIndex(
+    s => s.dataset.page === best.page && s.dataset.system === String(best.system)
+  );
+  if (index < 0) return;
+  const hit = hits[index];
+  hit.style.left = best.left + '%';
+  hit.classList.add('on');
+  const box = systems[index].getBoundingClientRect();
+  const top = window.scrollY + box.top;
+  if (top < window.scrollY + 60 || top > window.scrollY + window.innerHeight - 120) {
+    window.scrollTo({ top: box.top + window.scrollY - 80, behavior: 'smooth' });
+  }
+}
+
+if (audio) {
+  audio.addEventListener('timeupdate', () => {
+    const beat = audio.currentTime * (Number(rate.value) / 60);
+    markAt(beat);
+  });
+  audio.addEventListener('ended', () => {
+    hits.forEach(h => h.classList.remove('on'));
+    playBtn.textContent = '▶ 播放';
+  });
+  playBtn.addEventListener('click', () => {
+    if (audio.paused) { audio.play(); playBtn.textContent = '⏸ 暫停'; }
+    else { audio.pause(); playBtn.textContent = '▶ 播放'; }
+  });
+  stopBtn.addEventListener('click', () => {
+    audio.pause(); audio.currentTime = 0; playBtn.textContent = '▶ 播放';
+    hits.forEach(h => h.classList.remove('on'));
+  });
+}
+</script>
+</body></html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-HK"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>沉默是金 · 練習</title>
+<style>
+:root {
+  --ink: #14110e;
+  --paper: #fbf8f2;
+  --rule: #ddd5c6;
+  --accent: #8c2f39;
+  --muted: #6d6459;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 "Iowan Old Style", "Palatino Linotype", Palatino, "Songti TC", serif;
+}
+header {
+  padding: 28px 32px 18px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+h1 { font-size: 26px; margin: 0; letter-spacing: .02em; }
+.sub { color: var(--muted); font-size: 14px; }
+main { padding: 24px 32px 64px; }
+a { color: var(--accent); }
+.back { text-decoration: none; font-size: 14px; color: var(--muted); }
+
+.controls {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 22px; flex-wrap: wrap;
+}
+button {
+  font: inherit; font-size: 15px;
+  background: var(--ink); color: var(--paper);
+  border: 0; border-radius: 2px; padding: 9px 20px; cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+button:disabled { opacity: .4; cursor: default; }
+.tempo { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.tempo input { width: 120px; }
+
+.system {
+  position: relative;
+  margin: 0 0 6px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 6px;
+}
+.system img { display: block; width: 100%; height: auto; }
+.hit {
+  position: absolute; top: 0; bottom: 0; width: 3px;
+  background: var(--accent);
+  opacity: 0; transition: opacity .12s;
+  pointer-events: none;
+}
+.hit.on { opacity: .85; }
+
+.chords { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.chords b { color: var(--accent); font-weight: 600; }
+
+.legend { margin-top: 28px; font-size: 13px; color: var(--muted); max-width: 60ch; }
+</style></head><body>
+<header><a class="back" href="index.html">← 全部曲目</a>
+<h1>沉默是金</h1>
+<span class="sub">♩ = 60 · 11 行 · 117 個音符</span>
+</header><main>
+<div class="controls"><button id="play">▶ 播放</button><button id="stop" class="ghost">■ 停止</button><span class="tempo">速度 <input id="rate" type="range" min="50" max="140" value="60"> <b id="rateval">60</b></span></div>
+<div class="system" data-page="page-1" data-system="1">
+<img src="strips/page-1-sys01.png" alt="system 1">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-1" data-system="2">
+<img src="strips/page-1-sys02.png" alt="system 2">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-1" data-system="3">
+<img src="strips/page-1-sys03.png" alt="system 3">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-1" data-system="4">
+<img src="strips/page-1-sys04.png" alt="system 4">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-3" data-system="1">
+<img src="strips/page-3-sys01.png" alt="system 1">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-3" data-system="2">
+<img src="strips/page-3-sys02.png" alt="system 2">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-3" data-system="3">
+<img src="strips/page-3-sys03.png" alt="system 3">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-3" data-system="4">
+<img src="strips/page-3-sys04.png" alt="system 4">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-4" data-system="1">
+<img src="strips/page-4-sys01.png" alt="system 1">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-4" data-system="2">
+<img src="strips/page-4-sys02.png" alt="system 2">
+<div class="hit"></div>
+</div>
+<div class="system" data-page="page-4" data-system="3">
+<img src="strips/page-4-sys03.png" alt="system 3">
+<div class="hit"></div>
+</div>
+<p class="legend">樂譜為掃描原稿清理後的影像，和弦與歌詞保留在譜面之上與之下；播放的是從譜面讀出的旋律。</p>
+</main>
+<script>const SONG = {"bpm": 60, "marks": [{"page": "page-1", "system": 1, "left": 29.85332182916307, "beat": 1.1741, "pitch": "C5"}, {"page": "page-1", "system": 1, "left": 34.90077653149267, "beat": 1.4287, "pitch": "D5"}, {"page": "page-1", "system": 1, "left": 38.265746333045726, "beat": 1.5985, "pitch": "C5"}, {"page": "page-1", "system": 1, "left": 45.79378774805867, "beat": 1.9782, "pitch": "A4"}, {"page": "page-1", "system": 1, "left": 54.59447799827437, "beat": 2.4222, "pitch": "G4"}, {"page": "page-1", "system": 1, "left": 76.72562553925798, "beat": 3.5386, "pitch": "E4"}, {"page": "page-1", "system": 2, "left": 24.491121697704635, "beat": 4.9273, "pitch": "F4"}, {"page": "page-1", "system": 2, "left": 25.0974447812906, "beat": 4.9601, "pitch": "A4"}, {"page": "page-1", "system": 2, "left": 27.631009094846252, "beat": 5.0973, "pitch": "E4"}, {"page": "page-1", "system": 2, "left": 47.271546123863146, "beat": 6.1606, "pitch": "C5"}, {"page": "page-1", "system": 2, "left": 50.7362494586401, "beat": 6.3482, "pitch": "E4"}, {"page": "page-1", "system": 2, "left": 51.472498917280205, "beat": 6.388, "pitch": "C5"}, {"page": "page-1", "system": 2, "left": 74.46946730186228, "beat": 7.6331, "pitch": "A4"}, {"page": "page-1", "system": 2, "left": 79.10350801212647, "beat": 7.8839, "pitch": "G4"}, {"page": "page-1", "system": 2, "left": 81.203984408835, "beat": 7.9977, "pitch": "E4"}, {"page": "page-1", "system": 3, "left": 30.699088145896656, "beat": 9.0886, "pitch": "A4"}, {"page": "page-1", "system": 3, "left": 37.776812852800695, "beat": 9.4077, "pitch": "C5"}, {"page": "page-1", "system": 3, "left": 45.201910551454624, "beat": 9.7425, "pitch": "C5"}, {"page": "page-1", "system": 3, "left": 49.73947025618758, "beat": 9.9471, "pitch": "A4"}, {"page": "page-1", "system": 4, "left": 31.24454148471616, "beat": 12.3369, "pitch": "D5"}, {"page": "page-1", "system": 4, "left": 56.76855895196506, "beat": 13.8576, "pitch": "A4"}, {"page": "page-1", "system": 4, "left": 59.27947598253275, "beat": 14.0072, "pitch": "G4"}, {"page": "page-3", "system": 1, "left": 77.8270509977827, "beat": 32.9528, "pitch": "E4"}, {"page": "page-3", "system": 1, "left": 85.29933481152993, "beat": 35.982, "pitch": "D5"}, {"page": "page-3", "system": 2, "left": 65.98759964570417, "beat": 39.5857, "pitch": "E4"}, {"page": "page-3", "system": 2, "left": 83.45881310894598, "beat": 41.969, "pitch": "D5"}, {"page": "page-3", "system": 3, "left": 5.031028368794326, "beat": 44.0, "pitch": "F4"}, {"page": "page-3", "system": 3, "left": 5.76241134751773, "beat": 44.1263, "pitch": "A4"}, {"page": "page-3", "system": 3, "left": 7.358156028368795, "beat": 44.4019, "pitch": "E5"}, {"page": "page-3", "system": 3, "left": 28.036347517730498, "beat": 47.9732, "pitch": "F4"}, {"page": "page-3", "system": 3, "left": 53.169326241134755, "beat": 60.2737, "pitch": "A4"}, {"page": "page-3", "system": 3, "left": 59.330673758865245, "beat": 61.2883, "pitch": "C5"}, {"page": "page-3", "system": 3, "left": 76.32978723404256, "beat": 66.1818, "pitch": "B4"}, {"page": "page-3", "system": 3, "left": 98.09397163120568, "beat": 79.8364, "pitch": "E4"}, {"page": "page-3", "system": 3, "left": 99.09131205673759, "beat": 82.5714, "pitch": "C5"}, {"page": "page-3", "system": 4, "left": 14.260328742780986, "beat": 97.0, "pitch": "E4"}, {"page": "page-3", "system": 4, "left": 16.814749000444248, "beat": 100.6469, "pitch": "B4"}, {"page": "page-4", "system": 2, "left": 63.90960947784116, "beat": 39.4136, "pitch": "G4"}, {"page": "page-4", "system": 2, "left": 67.5954365949978, "beat": 39.9461, "pitch": "E4"}, {"page": "page-4", "system": 2, "left": 97.36726634488811, "beat": 55.7233, "pitch": "E4"}, {"page": "page-4", "system": 3, "left": 49.86784140969163, "beat": 70.1897, "pitch": "G4"}], "audio": "audio/chenmo.wav"};</script>
+
+<script>
+const audio = document.getElementById('play') ? new Audio(SONG.audio) : null;
+const playBtn = document.getElementById('play');
+const stopBtn = document.getElementById('stop');
+const rate = document.getElementById('rate');
+const rateVal = document.getElementById('rateval');
+const systems = Array.from(document.querySelectorAll('.system'));
+const hits = systems.map(s => s.querySelector('.hit'));
+
+if (rate) {
+  rate.addEventListener('input', () => {
+    rateVal.textContent = rate.value;
+    if (audio) audio.playbackRate = SONG.bpm / Number(rate.value);
+  });
+}
+
+function markAt(beat) {
+  // Which system and where on it the music has reached.
+  let best = null;
+  for (const m of SONG.marks) {
+    if (m.beat <= beat + 0.05) best = m;
+    else break;
+  }
+  hits.forEach(h => h.classList.remove('on'));
+  if (!best) return;
+  const index = systems.findIndex(
+    s => s.dataset.page === best.page && s.dataset.system === String(best.system)
+  );
+  if (index < 0) return;
+  const hit = hits[index];
+  hit.style.left = best.left + '%';
+  hit.classList.add('on');
+  const box = systems[index].getBoundingClientRect();
+  const top = window.scrollY + box.top;
+  if (top < window.scrollY + 60 || top > window.scrollY + window.innerHeight - 120) {
+    window.scrollTo({ top: box.top + window.scrollY - 80, behavior: 'smooth' });
+  }
+}
+
+if (audio) {
+  audio.addEventListener('timeupdate', () => {
+    const beat = audio.currentTime * (Number(rate.value) / 60);
+    markAt(beat);
+  });
+  audio.addEventListener('ended', () => {
+    hits.forEach(h => h.classList.remove('on'));
+    playBtn.textContent = '▶ 播放';
+  });
+  playBtn.addEventListener('click', () => {
+    if (audio.paused) { audio.play(); playBtn.textContent = '⏸ 暫停'; }
+    else { audio.pause(); playBtn.textContent = '▶ 播放'; }
+  });
+  stopBtn.addEventListener('click', () => {
+    audio.pause(); audio.currentTime = 0; playBtn.textContent = '▶ 播放';
+    hits.forEach(h => h.classList.remove('on'));
+  });
+}
+</script>
+</body></html>

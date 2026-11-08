@@ -1,148 +1,136 @@
-# Piano — smart accompaniment system
+# 演出譜集 — Smart accompaniment for the 2026-11-15 performance
 
-A system that **learns how you play**, then **quantises and corrects** your
-performance against a fixed song — without making you sound like a machine.
+Four songs, scanned as photographs of printed sheet music, turned into a
+readable score you can play from and a piece you can play along with.
+
+| 曲目 | 調 | ♩= | 來源 |
+|---|---|---|---|
+| Besame Mucho | G 大調 | 45 | MuseScore 螢幕擷取 |
+| 印象 | E 大調 → D 小調 | 84 | 書本印刷頁 |
+| 鐵塔凌雲 | 降 B 大調 | 97 | 書本印刷頁 |
+| 沉默是金 | C 大調 | 60 | 書本印刷頁 |
+
+## What is here
 
 ```
-  live MIDI ──► score following ──► learn your timing/dynamics ──► correct ──► audio
-   (keyboard)     (DTW / online)        (per-note offsets, vel curve)   (quantise + repair)
+web/                      the pages — open web/index.html
+  index.html              the four songs
+  <song>.html             one song: the score, the chords, the lyrics, a player
+  strips/                 the music, one image per system
+  audio/<song>.wav        the piece, rendered through sfizz
+
+tools/
+  prep_images.py          clean up a scanned page: deskew, flatten the paper
+  omr_bands.py            read the staff geometry out of an Audiveris book
+  omr_mask.py             take the clutter off a page, leaving the melody staff
+  reader.py               read the noteheads, stems, beams and flags
+  read_page.py            read a whole page
+  compare.py              show what was read against what is printed
+  ocr_chords.py           read the chord symbols
+  build_song.py           assemble a song: strips, notes, chords
+  song_to_midi.py         make a MIDI of the melody and the chords
+  make_site.py            build the web pages
+  omr_song.sh             the whole pipeline for one song
+
+scores/                   the scanned scores, and the raw photographs
+songs/                    (built) one folder per song
 ```
 
-## Status
+## The pipeline
 
-| Component | State |
-|---|---|
-| MIDI read/write | ✅ working, round-trip verified |
-| Offline alignment (DTW) | ✅ working |
-| Online tracker (real-time) | ✅ working, 16 tests |
-| Player profile learning | ✅ working, persists to JSON |
-| Quantisation (humanised + strict) | ✅ working |
-| Pitch correction | ✅ working |
-| Velocity curve | ✅ working |
-| Audio render (sfizz) | ✅ working, pitch-accurate to ±0.15 semitone |
-| Live MIDI capture | ✅ implemented (no MIDI device attached to this Mac to test with) |
+```
+scores/*.pdf
+   │  pdftoppm 200 dpi          the PDF holds a 200 dpi grey JPEG of the page
+   ▼
+work/omr/pages/<song>/
+   │  prep_images.py            strip the editor's header, remove the publisher
+   │                            banner, level the staves, flatten the paper
+   ▼
+work/songs/<song>/prep/
+   │  audiveris (pass 1)        find the staves.  Audiveris's grid step is
+   │                            very good at this, and it models every staff
+   │                            line as a polyline, so it copes with the warp
+   │                            of a photographed page.
+   ▼
+work/songs/<song>/omr1/
+   │  omr_mask.py               keep the melody staff, throw the rest away
+   ▼
+work/songs/<song>/masked/
+   │  reader.py                 find the noteheads and read them
+   ▼
+work/songs/<song>/song.json    the song: the music as images, and as notes
+   │  ocr_chords.py             the chord symbols
+   │  song_to_midi.py           the melody and the chords → MIDI
+   │  render (sfizz)            MIDI → WAV
+   ▼
+web/
+```
 
-**43 tests passing** (`python3 -m tests.run_all`).
+## Why the reading is done this way
 
-## Quick start
+Audiveris was tried first, on the whole page.  It finds the staves perfectly —
+that is what its grid step is for — but it cannot read the notes, because a
+score page is full of things that are not notes:
+
+* **chord symbols** above the staff, which look like noteheads;
+* **guitar chord diagrams**, which are little grids of lines and look exactly
+  like staves;
+* **lyrics** between the staves, which look like beams;
+* **fingering numbers**, which are small round blobs and look like noteheads.
+
+It read them all as notes, and the result was worse than nothing — a wrong
+reference is worse than no reference, because the practice system would then
+"correct" a correct performance into an incorrect one.
+
+So the geometry is taken from Audiveris and the notes are read separately, on
+a page with the clutter taken off.  The note reading itself uses three
+measurements of the shape of the ink — how much of a notehead-sized ellipse is
+full, how much of its middle is full, and how wide the thing is — because a
+notehead is the only thing on a staff that is solid all the way through, or
+solid at the rim and hollow in the middle, and about one and a third
+interlines across.
+
+`tools/compare.py` draws what was read back onto the printed page.  That
+picture is the evidence for the reading, and it is the thing to look at when
+a bar looks wrong.
+
+## What is exact and what is approximate
+
+**Exact** — the score on the web page is the printed score, cleaned up.  It
+is the original notation, not a redrawing, so the chords above the staff and
+the lyrics below it are the ones that were printed.  The bars, the key, the
+time signature and the fingering are all as printed.
+
+**Approximate** — the melody that is played comes from the reading.  It gets
+most of the notes and most of the rhythm right, but not all of it: the dense
+passages, where the beams are steep and the notes are close together, are the
+hardest and the least certain.  The chord symbols are read by OCR and come
+out right for Besame Mucho and 沉默是金; the two book scores print theirs
+inside boxes next to guitar diagrams, and those have not been read yet.
+
+The point of the page is therefore to be checked against the printed score,
+and the point of `tools/compare.py` is to make that checking quick.
+
+## Running it
 
 ```bash
-cd /Users/blee/src/piano
+# the whole pipeline for one song
+tools/omr_song.sh besame work/omr/pages/besame work/songs/besame 3.0
+tools/ocr_song_chords.sh besame work/songs/besame
+tools/song_to_midi.py work/songs/besame/song.json work/songs/besame/song.mid \
+    --chords work/songs/besame/chords.json --bpm 45
+tools/make_site.py --songs work/songs --out web
 
-# 1. Render a MIDI file to audio (Salamander Grand Piano)
-python3 -m piano.render songs/prelude.mid work/prelude.wav
-
-# 2. Learn from a performance
-python3 -m piano.cli learn songs/prelude.mid work/prelude.take.mid --player demo --song prelude
-
-# 3. Correct it
-python3 -m piano.cli correct songs/prelude.mid work/prelude.take.mid \
-    --player demo --song prelude --division eighth --strict \
-    --out work/prelude.corrected.mid
-
-# 4. Inspect what was learned
-python3 -m piano.cli profile --player demo --song prelude
-
-# 5. Run the self-test
-python3 -m tests.run_all
+# look at it
+cd web && python3 -m http.server 8765
 ```
 
-## The two correction modes
+## Notes on the sources
 
-This is the central design decision, and it is worth understanding.
-
-| Mode | What it does | When to use |
-|---|---|---|
-| **humanised** (default) | Removes your *jitter* but keeps your learned systematic offset — you keep playing slightly late, just consistently | Practising, keeping your own feel |
-| **strict** (`--strict`) | Snaps everything exactly onto the grid | The output must match a fixed song precisely |
-
-Measured on the bundled `prelude` example (a simulated player who is 43 ms late with ±21 ms jitter):
-
-```
-  raw take     cov 84.4% | err  +42.7ms sd 42.6 | wrong 3 | max off-grid 110.8ms
-  humanised    cov 87.5% | err  +37.2ms sd 42.2 | wrong 0 | max off-grid 106.7ms
-  strict       cov 96.9% | err   -4.3ms sd  1.4 | wrong 1 | max off-grid   4.8ms
-```
-
-## Architecture
-
-```
-piano/
-  core/
-    notes.py     Note / Sequence - one representation for score and performance
-    tempo.py     TempoMap, Grid - musical time and quantisation grids
-    align.py     DTW score following (offline), key detection
-    tracker.py   OnlineTracker - streaming note matching for real-time use
-    profile.py   PlayerProfile - learned per-position timing + velocity curve
-    correct.py   Quantisation, pitch repair, velocity re-mapping
-  io/
-    midi_io.py   MIDI read/write (mido), tempo-map aware
-    recorder.py  Live capture from a MIDI keyboard
-    audio.py     sfizz rendering, level analysis
-  render.py      CLI: MIDI -> WAV
-  cli.py         CLI: render / learn / correct / profile / ports / demo
-```
-
-### Why the pieces are separated
-
-- **`notes.py`** — one `Note` type for both the score and the take means the
-  alignment stage can compare them directly. The strike list (onsets in time
-  order) is the canonical index space used by profiles, alignment and
-  corrections alike.
-- **`align.py` vs `tracker.py`** — offline DTW is exact and needs the whole
-  take; the online tracker decides *now* which score note you just played.
-  Both use the same cost model so they agree.
-- **`profile.py`** — stores per-position timing statistics (Welford's
-  algorithm) rather than one global offset, because players are not
-  uniformly late: the melody may be late while the accompaniment is early.
-  That is exactly what the bundled example demonstrates.
-
-## Instrument
-
-Two open-source SFZ libraries are bundled under `samples/` (see
-`samples/README.md` for provenance and licensing):
-
-- **Salamander Grand Piano V3** — CC-BY-3.0, Yamaha C5, 16 velocity layers
-- **Splendid Grand Piano** — Public Domain (AKAI), Steinway, 4 velocity layers
-
-Both are **SFZ v2 + ARIA extensions**. `sfizz` (BSD-2, open source) handles
-the core SFZ opcodes but not the full ARIA superset — string resonance and
-half-pedalling are missing there. For the reference sound, use **sforzando**
-(free but closed-source) or accept the loss in sfizz.
-
-`bin/sfizz_render` and `bin/lib/libsfizz.dylib` come from the
-[sfizz 1.2.3 macOS release](https://github.com/sfztools/sfizz/releases).
-
-## Recording a live take
-
-```python
-from piano.io.recorder import MidiRecorder, RecorderConfig
-
-recorder = MidiRecorder(RecorderConfig(count_in_beats=4, count_in_bpm=92))
-result = recorder.record(port="Keyboard", duration=13.0)
-result.sequence   # -> Sequence of what you actually played
-```
-
-The recorder timestamps against a monotonic clock (not the MIDI clock),
-tolerates unmatched note-on/note-off, and counts in before arming.
-
-## Known gaps
-
-- **Live capture is untested against a real device** — no MIDI keyboard is
-  attached to this Mac. The code path is complete but needs a device to
-  validate latency and drop handling.
-- **The online tracker is not yet wired into a live correction loop.** It is
-  tested in isolation and agrees with the offline aligner, but the loop that
-  would correct a note while it is still sounding does not exist yet.
-- **`add_missing` is conservative by design** — it only fills a gap when
-  neighbouring notes confirm the context, so it under-fills rather than
-  inventing notes.
-- **Sofia MZ's piano libraries could not be obtained.** Her official site
-  (Wix) is unpublished and her SourceForge projects are deleted; see
-  `samples/README.md` for the full evidence trail.
-
-## Licensing note
-
-Salamander is **CC-BY-3.0** — attribution is required if you redistribute it.
-If you ship this system with bundled sounds, credit Alexander Holm /
-Chisato Yamauchi / the SFZ Instruments project.
+* The scores were photographed off a screen (Besame Mucho) and off a printed,
+  spiral-bound book (the other three).  沉默是金's book pages 54 and 55 are
+  the same photograph, so that page is only read once.
+* Audiveris is under the AGPL; its macOS build is in `tools/Audiveris.app`.
+* Tesseract reads the chord symbols; the language data is in `tools/tessdata`.
+* The piano is the Salamander Grand in `samples/` (CC-BY-3.0), played through
+  sfizz.

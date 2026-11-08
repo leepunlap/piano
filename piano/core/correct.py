@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from .align import Alignment, align_sequences, key_of
+from .align import Alignment, align_sequences, detect_octave_shift, key_of
 from .notes import Note, Sequence
 from .profile import PlayerProfile
 from .tempo import Grid
@@ -261,6 +261,15 @@ def score_position_map(performance: Sequence, alignment: Alignment) -> dict[int,
     return mapping
 
 
+def transpose(sequence: Sequence, semitones: int) -> Sequence:
+    """Shift every pitch by `semitones`."""
+    return Sequence(
+        notes=[n.with_pitch(n.pitch + semitones) for n in sequence.notes],
+        tempo_map=list(sequence.tempo_map),
+        name=sequence.name,
+    )
+
+
 def correct_performance(
     reference: Sequence,
     performance: Sequence,
@@ -272,6 +281,7 @@ def correct_performance(
     velocity_blend: float = 1.0,
     alignment: Alignment | None = None,
     strict: bool = False,
+    octave_shift: int | None = None,
 ) -> tuple[Sequence, CorrectionReport]:
     """Full correction pass over one performance.
 
@@ -285,12 +295,25 @@ def correct_performance(
       learned systematic offset, so the result still sounds like them.
     * `strict=True` snaps everything exactly onto the grid, which is what
       you want when the output must match a fixed song precisely.
+
+    `octave_shift` transposes the performance before correcting.  If the
+    player followed the guide an octave down, the take is moved back into the
+    score's register first, so the pitch repair has something sensible to
+    work with.  Pass None to detect it automatically.
     """
     if alignment is None:
         alignment = align_sequences(reference, performance)
 
     report = CorrectionReport()
     current = performance
+
+    if octave_shift is None:
+        octave_shift = detect_octave_shift(reference, current, alignment)
+    if octave_shift:
+        current = transpose(current, -12 * octave_shift)
+        report.notes.append(f"performance transposed by {-12 * octave_shift:+d} semitones")
+        # The alignment refers to note indices, which survive transposition.
+        alignment = align_sequences(reference, current)
 
     if fix_pitches:
         current, pitch_report = correct_pitches(alignment, reference, current)

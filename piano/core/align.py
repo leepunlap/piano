@@ -56,6 +56,7 @@ def _local_cost(
     pitch_weight: float,
     time_weight: float,
     time_tolerance: float,
+    octave_tolerant: bool = True,
 ) -> float:
     """Cost of matching two notes.
 
@@ -68,9 +69,18 @@ def _local_cost(
     * Pitch is penalised quadratically per semitone but gently enough that a
       slightly wrong note still aligns to its slot - that is exactly the case
       the pitch corrector needs to see.
+
+    With `octave_tolerant` set, a note an exact octave (or two) away is
+    treated as a *transposition* rather than a wrong note, and is penalised
+    much less.  Players routinely follow a guide an octave down, and refusing
+    to align across octaves would throw the whole take away.
     """
     semitones = abs(ref.pitch - perf.pitch)
-    pitch_cost = 0.25 * semitones * semitones
+    if octave_tolerant and semitones >= 12 and semitones % 12 == 0:
+        # Same pitch class, different octave: a transposition, not an error.
+        pitch_cost = 0.05 * (semitones // 12) ** 2
+    else:
+        pitch_cost = 0.25 * semitones * semitones
     delta = (ref.start - perf.start) / max(1e-6, time_tolerance)
     time_cost = delta * delta
     return pitch_weight * pitch_cost + time_weight * time_cost
@@ -84,6 +94,8 @@ def align_sequences(
     time_tolerance: float = 0.15,
     max_time_gap: float = 2.0,
     skip_penalty: float = 1.0,
+    octave_tolerant: bool = True,
+    global_offset: Optional[float] = None,
 ) -> Alignment:
     """Align a performance to a reference score with dynamic time warping.
 
@@ -93,9 +105,16 @@ def align_sequences(
 
     `max_time_gap` bounds how far apart a matched pair may be in time, which
     keeps the alignment from pairing a note with something wildly distant.
+
+    `global_offset` shifts the performance in time before aligning.  Use it
+    when the player started late or early relative to the guide track; see
+    `find_global_offset` to determine the value.
     """
     ref_notes = reference.strikes()
     perf_notes = performance.strikes()
+
+    if global_offset:
+        perf_notes = [note.shifted(global_offset) for note in perf_notes]
 
     n, m = len(ref_notes), len(perf_notes)
     if n == 0 or m == 0:
@@ -125,7 +144,7 @@ def align_sequences(
                 match_cost = float("inf")
             else:
                 match_cost = dp[i - 1][j - 1] + _local_cost(
-                    ref, perf, pitch_weight, time_weight, time_tolerance
+                    ref, perf, pitch_weight, time_weight, time_tolerance, octave_tolerant
                 )
 
             skip_ref_cost = dp[i - 1][j] + skip_penalty
@@ -171,6 +190,115 @@ def align_sequences(
         unmatched_performed=unmatched_perf,
         cost=dp[n][m],
     )
+
+
+def find_global_offset(
+    reference: Sequence,
+    performance: Sequence,
+    search_range: float = 10.0,
+    step: float = 0.02,
+) -> tuple[float, int]:
+    """Find the time shift that best aligns a performance to the score.
+
+    When a player follows a guide track they may start late or early, and
+    the take may not begin at the same moment as the score.  Rather than
+    discarding the take, the offset is searched for.
+
+    Returns (offset, matched_count).  The offset is added to the
+    performance's times to bring it onto the score's timeline.
+
+    The search compares pitch *classes*, so an octave transposition still
+    matches, and it is a coarse-to-fine scan rather than a full DTW for
+    every candidate offset.
+    """
+    ref_strikes = reference.strikes()
+    perf_strikes = performance.strikes()
+    if not ref_strikes or not perf_strikes:
+        return 0.0, 0
+
+    ref_classes = [note.pitch % 12 for note in ref_strikes]
+    ref_times = [note.start for note in ref_strikes]
+    perf_classes = [note.pitch % 12 for note in perf_strikes]
+    perf_times = [note.start for note in perf_strikes]
+
+    def score_at(offset: float) -> int:
+        matched = 0
+        used: set[int] = set()
+        for cls, time_s in zip(perf_classes, perf_times):
+            shifted = time_s - offset
+            best_j = -1
+            best_dt = 0.12
+            for j, (rcls, rt) in enumerate(zip(ref_classes, ref_times)):
+                if j in used or rcls != cls:
+                    continue
+                dt = abs(rt - shifted)
+                if dt < best_dt:
+                    best_dt = dt
+                    best_j = j
+            if best_j >= 0:
+                used.add(best_j)
+                matched += 1
+        return matched
+
+    best_offset = 0.0
+    best_score = score_at(0.0)
+
+    coarse = step * 10
+    offset = -search_range
+    while offset <= search_range:
+        value = score_at(offset)
+        if value > best_score:
+            best_score = value
+            best_offset = offset
+        offset += coarse
+
+    # Refine around the best coarse offset.
+    offset = best_offset - coarse
+    while offset <= best_offset + coarse:
+        value = score_at(offset)
+        if value > best_score:
+            best_score = value
+            best_offset = offset
+        offset += step
+
+    return best_offset, best_score
+
+
+def detect_octave_shift(
+    reference: Sequence,
+    performance: Sequence,
+    alignment: Optional[Alignment] = None,
+) -> int:
+    """How many octaves the performance is transposed relative to the score.
+
+    Returns 0 for no shift, -1 for an octave down, +1 for an octave up.
+
+    Players often follow a guide an octave down or up - especially on a
+    keyboard where the guide sits in an awkward register.  Knowing the shift
+    lets the corrector transpose the take back rather than treating every
+    note as wrong.
+    """
+    if alignment is None:
+        alignment = align_sequences(reference, performance)
+
+    ref_strikes = reference.strikes()
+    perf_strikes = performance.strikes()
+
+    shifts: list[int] = []
+    for ref_index, perf_index in alignment.pairs:
+        if ref_index >= len(ref_strikes) or perf_index >= len(perf_strikes):
+            continue
+        difference = perf_strikes[perf_index].pitch - ref_strikes[ref_index].pitch
+        if difference % 12 == 0 and abs(difference) >= 12:
+            shifts.append(difference // 12)
+
+    if not shifts:
+        return 0
+    # The most common shift wins.
+    counts: dict[int, int] = {}
+    for shift in shifts:
+        counts[shift] = counts.get(shift, 0) + 1
+    return max(counts.items(), key=lambda item: item[1])[0]
 
 
 def pitch_histogram(sequence: Sequence) -> dict[int, int]:

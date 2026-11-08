@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-HK"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2026-11-15 演出譜集</title>
+<style>
+:root {
+  --ink: #14110e;
+  --paper: #fbf8f2;
+  --rule: #ddd5c6;
+  --accent: #8c2f39;
+  --muted: #6d6459;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 "Iowan Old Style", "Palatino Linotype", Palatino, "Songti TC", serif;
+}
+header {
+  padding: 28px 32px 18px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+h1 { font-size: 26px; margin: 0; letter-spacing: .02em; }
+.sub { color: var(--muted); font-size: 14px; }
+main { padding: 24px 32px 64px; }
+a { color: var(--accent); }
+.back { text-decoration: none; font-size: 14px; color: var(--muted); }
+
+.controls {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 22px; flex-wrap: wrap;
+}
+button {
+  font: inherit; font-size: 15px;
+  background: var(--ink); color: var(--paper);
+  border: 0; border-radius: 2px; padding: 9px 20px; cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+button:disabled { opacity: .4; cursor: default; }
+.tempo { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.tempo input { width: 120px; }
+
+.system {
+  position: relative;
+  margin: 0 0 6px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 6px;
+}
+.system img { display: block; width: 100%; height: auto; }
+.hit {
+  position: absolute; top: 0; bottom: 0; width: 3px;
+  background: var(--accent);
+  opacity: 0; transition: opacity .12s;
+  pointer-events: none;
+}
+.hit.on { opacity: .85; }
+
+.chords { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.chords b { color: var(--accent); font-weight: 600; }
+
+.legend { margin-top: 28px; font-size: 13px; color: var(--muted); max-width: 60ch; }
+</style></head><body>
+<header><h1>2026-11-15 演出譜集</h1>
+<span class="sub">四首 · 掃描譜的清理與讀譜</span></header><main>
+<div class="system" style="padding:18px 0">
+<p style="margin:0 0 6px"><a href="besame.html" style="font-size:20px">Besame Mucho</a> <span class='sub'>♩ = 45 · 185 音符</span></p>
+<p style="margin:0 0 6px"><a href="yinxiang.html" style="font-size:20px">印象</a> <span class='sub'>♩ = 84 · 404 音符</span></p>
+<p style="margin:0 0 6px"><a href="tieta.html" style="font-size:20px">鐵塔凌雲</a> <span class='sub'>♩ = 97 · 139 音符</span></p>
+<p style="margin:0 0 6px"><a href="chenmo.html" style="font-size:20px">沉默是金</a> <span class='sub'>♩ = 60 · 117 音符</span></p>
+</div>
+<p class="legend">每一頁是該曲的樂譜、歌詞與和弦，可以由頭到尾播放；之後再接上鍵盤，讓你改速度、改風格而保留和弦。</p>
+</main></body></html>

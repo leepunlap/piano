@@ -15,7 +15,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from piano.core.align import align_sequences, key_of
+from piano.core.align import (
+    align_sequences,
+    detect_octave_shift,
+    find_global_offset,
+    key_of,
+)
 from piano.core.correct import correct_performance, correct_pitches, quantise
 from piano.core.notes import Note, Sequence
 from piano.core.profile import PlayerProfile
@@ -267,6 +272,76 @@ def test_strict_mode() -> None:
           f"strict {strict_error*1000:.1f} ms vs humanised {human_error*1000:.1f} ms")
 
 
+def test_global_offset() -> None:
+    print("\n[10] Global offset detection")
+    score = build_score()
+    take = human_take(score, mean_lag=0.0, lag_spread=0.010)
+    shifted = Sequence(
+        notes=[n.shifted(2.4) for n in take.notes], tempo_map=list(take.tempo_map)
+    )
+
+    offset, matches = find_global_offset(score, shifted)
+    check("offset recovered", abs(offset - 2.4) < 0.08, f"got {offset:+.3f}s")
+    check("most notes matched at that offset", matches > 0.8 * len(score.strikes()),
+          f"{matches} of {len(score.strikes())}")
+
+    corrected_take = Sequence(
+        notes=[n.shifted(-offset) for n in shifted.notes], tempo_map=list(shifted.tempo_map)
+    )
+    alignment = align_sequences(score, corrected_take)
+    check("alignment works after offsetting", alignment.coverage > 0.85,
+          f"coverage {alignment.coverage:.1%}")
+
+
+def test_octave_shift() -> None:
+    print("\n[11] Octave shift detection")
+    score = build_score()
+    take = human_take(score, mean_lag=0.02)
+
+    # The player follows the guide an octave down.
+    down = Sequence(
+        notes=[n.with_pitch(n.pitch - 12) for n in take.notes],
+        tempo_map=list(take.tempo_map),
+    )
+
+    alignment = align_sequences(score, down)
+    check("alignment survives an octave transposition", alignment.coverage > 0.8,
+          f"coverage {alignment.coverage:.1%}")
+
+    shift = detect_octave_shift(score, down, alignment)
+    check("octave down detected", shift == -1, f"got {shift}")
+
+    back = Sequence(
+        notes=[n.with_pitch(n.pitch + 12) for n in down.notes],
+        tempo_map=list(down.tempo_map),
+    )
+    check("octave up detected", detect_octave_shift(score, back) == 1)
+
+    # No shift when the player stays in register.
+    check("no shift detected when in register", detect_octave_shift(score, take) == 0)
+
+
+def test_transposed_take_is_corrected() -> None:
+    print("\n[12] Correcting a transposed take")
+    score = build_score()
+    take = human_take(score, mean_lag=0.03)
+    down = Sequence(
+        notes=[n.with_pitch(n.pitch - 12) for n in take.notes],
+        tempo_map=list(take.tempo_map),
+    )
+    grid = Grid(TempoMap.constant(100.0), divisions=2)
+
+    corrected, report = correct_performance(score, down, grid, strict=True)
+
+    wrong_after = 0
+    alignment = align_sequences(score, corrected)
+    for ref_index, perf_index in alignment.pairs:
+        if score.strikes()[ref_index].pitch != corrected.strikes()[perf_index].pitch:
+            wrong_after += 1
+    check("transposed take is transposed back", wrong_after == 0, f"{wrong_after} wrong pitches")
+    check("the shift is reported", any("transposed" in note for note in report.notes))
+
+
 def _mean_abs_error(seq: Sequence, score: Sequence) -> float:
     alignment = align_sequences(score, seq)
     ref = score.strikes()
@@ -315,6 +390,9 @@ def main() -> int:
     test_key_detection()
     test_full_pass()
     test_strict_mode()
+    test_global_offset()
+    test_octave_shift()
+    test_transposed_take_is_corrected()
 
     print("\n" + "=" * 68)
     print(f"{len(PASSED)} passed, {len(FAILED)} failed")
