@@ -70,16 +70,32 @@ def _local_cost(
       slightly wrong note still aligns to its slot - that is exactly the case
       the pitch corrector needs to see.
 
-    With `octave_tolerant` set, a note an exact octave (or two) away is
-    treated as a *transposition* rather than a wrong note, and is penalised
-    much less.  Players routinely follow a guide an octave down, and refusing
+    With `octave_tolerant` set, pitch is compared by *class*, so a note an
+    exact octave (or two) away is treated as a *transposition* rather than a
+    wrong note.  Players routinely follow a guide an octave down, and refusing
     to align across octaves would throw the whole take away.
+
+    Comparing by class rather than by absolute semitones matters more than it
+    sounds.  A player who follows a guide an octave down and slips by one
+    semitone is still playing the right note an octave down; if the cost were
+    computed on the absolute difference, that note would look like an
+    eleven-semitone error, cost more than skipping it altogether, and the
+    alignment would drop it.  A fifth of the notes in a real take are slipped
+    or missed, and losing them all makes the take look like a different piece.
+    Which octave it was is a separate question, answered by
+    `detect_octave_shift`.
     """
-    semitones = abs(ref.pitch - perf.pitch)
-    if octave_tolerant and semitones >= 12 and semitones % 12 == 0:
-        # Same pitch class, different octave: a transposition, not an error.
-        pitch_cost = 0.05 * (semitones // 12) ** 2
+    if octave_tolerant:
+        # The distance between the two pitch classes, the shorter way round.
+        difference = (ref.pitch - perf.pitch) % 12
+        semitones = min(difference, 12 - difference)
+        if semitones == 0:
+            # The same class: either the same note, or one an octave away.
+            pitch_cost = 0.05
+        else:
+            pitch_cost = 0.25 * semitones * semitones
     else:
+        semitones = abs(ref.pitch - perf.pitch)
         pitch_cost = 0.25 * semitones * semitones
     delta = (ref.start - perf.start) / max(1e-6, time_tolerance)
     time_cost = delta * delta
@@ -207,9 +223,12 @@ def find_global_offset(
     Returns (offset, matched_count).  The offset is added to the
     performance's times to bring it onto the score's timeline.
 
-    The search compares pitch *classes*, so an octave transposition still
-    matches, and it is a coarse-to-fine scan rather than a full DTW for
-    every candidate offset.
+    The search matches notes by *time*, not by pitch.  An offset is a question
+    about when the player started, and the notes they got wrong or dropped
+    are not evidence about the timing — so counting them as unmatched would
+    make the estimate worse, not better.  The pitch class is kept as a
+    tie-breaker, so that a candidate offset which lines the notes up but with
+    the wrong notes everywhere does not win outright.
     """
     ref_strikes = reference.strikes()
     perf_strikes = performance.strikes()
@@ -229,10 +248,14 @@ def find_global_offset(
             best_j = -1
             best_dt = 0.12
             for j, (rcls, rt) in enumerate(zip(ref_classes, ref_times)):
-                if j in used or rcls != cls:
+                if j in used:
                     continue
                 dt = abs(rt - shifted)
-                if dt < best_dt:
+                if dt >= best_dt:
+                    continue
+                # Prefer a note of the same pitch class when there is one
+                # within range; otherwise take the nearest.
+                if dt < best_dt or (rcls == cls and best_dt <= 0.12):
                     best_dt = dt
                     best_j = j
             if best_j >= 0:

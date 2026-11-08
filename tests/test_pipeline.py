@@ -311,9 +311,10 @@ def test_octave_shift() -> None:
     shift = detect_octave_shift(score, down, alignment)
     check("octave down detected", shift == -1, f"got {shift}")
 
+    # The player follows the guide an octave UP.
     back = Sequence(
-        notes=[n.with_pitch(n.pitch + 12) for n in down.notes],
-        tempo_map=list(down.tempo_map),
+        notes=[n.with_pitch(n.pitch + 12) for n in take.notes],
+        tempo_map=list(take.tempo_map),
     )
     check("octave up detected", detect_octave_shift(score, back) == 1)
 
