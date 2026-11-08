@@ -21,6 +21,11 @@
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <pthread.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#include <string.h>
+#include <math.h>
 #include "sfizz.h"
 
 static sfizz_synth_t *gSynth = NULL;
@@ -28,8 +33,26 @@ static pthread_mutex_t gLock = PTHREAD_MUTEX_INITIALIZER;
 static int gBlockSize = 512;
 static float *gLeft = NULL;      // the synth's output, one plane per channel
 static float *gRight = NULL;
+
+// A queue of rendered audio.
+//
+// The synth renders whole blocks of its own size; the audio unit asks for
+// however many frames it wants, which is rarely the same number.  Rendering
+// straight into the unit's buffer would throw away whatever did not fit,
+// and the audio would then run at the wrong speed -- which sounds like
+// noise.  So the blocks go into a queue, and the unit is served exactly the
+// number of frames it asked for.
+#define QUEUE_BLOCKS 16
+static float *qLeft = NULL;
+static float *qRight = NULL;
+static int qWrite = 0;      // where the next block goes
+static int qRead = 0;       // where the next frame comes from
+static int qAvailable = 0;  // frames ready to be taken
 static int gVoices = 0;
 static int gNotesOn = 0;
+static float gPeak = 0.0f;      // the loudest sample the synth has produced
+static int gClipped = 0;        // how many samples have gone past full scale
+static FILE *gTap = NULL;       // where the audio can be written out to look at
 
 static void noteOn(int note, int velocity) {
     pthread_mutex_lock(&gLock);
@@ -89,13 +112,34 @@ static OSStatus renderCallback(void *refCon,
 
     if (ioData->mNumberBuffers < 1 || gLeft == NULL) return noErr;
 
-    // The synth renders whole blocks; if the audio unit asks for a different
-    // number of frames, render enough blocks to cover it.
-    UInt32 blocks = (inNumberFrames + gBlockSize - 1) / gBlockSize;
     pthread_mutex_lock(&gLock);
-    for (UInt32 b = 0; b < blocks; b++) {
-        float *pointers[2] = {gLeft + (size_t)b * gBlockSize, gRight + (size_t)b * gBlockSize};
+
+    // Render until there is enough audio to hand over.
+    while (qAvailable < (int)inNumberFrames) {
+        float *pointers[2] = {
+            qLeft + (size_t)qWrite * gBlockSize,
+            qRight + (size_t)qWrite * gBlockSize,
+        };
         sfizz_render_block(gSynth, pointers, 2, gBlockSize);
+        qWrite = (qWrite + 1) % QUEUE_BLOCKS;
+        qAvailable += gBlockSize;
+    }
+
+    // Take exactly what was asked for.
+    float *outLeft = (float *)malloc(inNumberFrames * sizeof(float));
+    float *outRight = (float *)malloc(inNumberFrames * sizeof(float));
+    for (UInt32 i = 0; i < inNumberFrames; i++) {
+        int offset = qRead % gBlockSize;
+        // The queue wraps: the read counter runs on for ever, but the blocks
+        // it points at are taken modulo the size of the queue.
+        int block = (qRead / gBlockSize) % QUEUE_BLOCKS;
+        outLeft[i] = qLeft[(size_t)block * gBlockSize + offset];
+        outRight[i] = qRight[(size_t)block * gBlockSize + offset];
+        float value = fabsf(outLeft[i]);
+        if (value > gPeak) gPeak = value;
+        if (value > 0.999f) gClipped++;
+        qRead++;
+        qAvailable--;
     }
     pthread_mutex_unlock(&gLock);
 
@@ -106,19 +150,27 @@ static OSStatus renderCallback(void *refCon,
         UInt32 available = ioData->mBuffers[0].mDataByteSize / (2 * sizeof(float));
         UInt32 count = inNumberFrames < available ? inNumberFrames : available;
         for (UInt32 i = 0; i < count; i++) {
-            out[2 * i] = gLeft[i];
-            out[2 * i + 1] = gRight[i];
+            out[2 * i] = outLeft[i];
+            out[2 * i + 1] = outRight[i];
         }
     } else {
         for (UInt32 c = 0; c < channels; c++) {
             if (ioData->mBuffers[c].mData == NULL) continue;
             float *out = (float *)ioData->mBuffers[c].mData;
-            float *plane = (c == 0) ? gLeft : gRight;
+            float *plane = (c == 0) ? outLeft : outRight;
             UInt32 available = ioData->mBuffers[c].mDataByteSize / sizeof(float);
             UInt32 count = inNumberFrames < available ? inNumberFrames : available;
             memcpy(out, plane, count * sizeof(float));
         }
     }
+    if (gTap != NULL) {
+        for (UInt32 i = 0; i < inNumberFrames; i++) {
+            float pair[2] = {outLeft[i], outRight[i]};
+            fwrite(pair, sizeof(float), 2, gTap);
+        }
+    }
+    free(outLeft);
+    free(outRight);
     return noErr;
 }
 
@@ -221,8 +273,28 @@ static int setupMIDI(const char *wanted) {
     return 0;
 }
 
+// Only one copy at a time: two copies both listening to the keyboard both
+// play every note, and the two instruments beat against each other.
+static int claimTheKeyboard(void) {
+    const char *path = "/tmp/sampled_piano.lock";
+    int fd = open(path, O_CREAT | O_RDWR, 0644);
+    if (fd < 0) return 0;
+    struct flock lock;
+    memset(&lock, 0, sizeof(lock));
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    if (fcntl(fd, F_SETLK, &lock) == -1) {
+        fprintf(stderr, "another copy is already running - close it first\n");
+        close(fd);
+        return -1;
+    }
+    return fd;  // held for as long as the process lives
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
+        int lock = claimTheKeyboard();
+        if (lock < 0) return 1;
         const char *sfzPath = "/Users/blee/src/piano/samples/SalamanderGrandPiano/Salamander Grand Piano V3.sfz";
         const char *wanted = NULL;
         for (int i = 1; i < argc; i++) {
@@ -246,6 +318,8 @@ int main(int argc, const char *argv[]) {
 
         gLeft = (float *)calloc((size_t)gBlockSize * 8, sizeof(float));
         gRight = (float *)calloc((size_t)gBlockSize * 8, sizeof(float));
+        qLeft = (float *)calloc((size_t)gBlockSize * QUEUE_BLOCKS, sizeof(float));
+        qRight = (float *)calloc((size_t)gBlockSize * QUEUE_BLOCKS, sizeof(float));
         if (setupAudio(48000) != 0) return 1;
         if (setupMIDI(wanted) != 0) return 1;
 
@@ -258,10 +332,14 @@ int main(int argc, const char *argv[]) {
             // checked on its own.
             printf("test: playing a chord\n");
             fflush(stdout);
+            const char *tapPath = getenv("SAMPLED_PIANO_TAP");
+            if (tapPath != NULL) gTap = fopen(tapPath, "wb");
             noteOn(60, 100); noteOn(64, 100); noteOn(67, 100); noteOn(72, 100);
             sleep(3);
             noteOff(60); noteOff(64); noteOff(67); noteOff(72);
             sleep(2);
+            printf("peak %.3f   clipped samples %d\n", gPeak, gClipped);
+            if (gTap != NULL) { fclose(gTap); gTap = NULL; }
             return 0;
         }
 
