@@ -345,6 +345,42 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return run_tests()
 
 
+def cmd_play(args: argparse.Namespace) -> int:
+    """Play a song, or any MIDI or WAV file, out of the speakers.
+
+    A MIDI file is rendered first, with sfizz and the Salamander piano, so
+    that what comes out of the speakers is a piano rather than the machine's
+    built-in General MIDI sound, which is a piano in the way a fax machine is
+    a printer.
+    """
+    import os
+    import time
+
+    from piano.io.audio import load_wav, render_midi_to_wav
+    from piano.io.playback import AudioPlayer
+
+    path = args.file
+    if path.lower().endswith(".mid") or path.lower().endswith(".midi"):
+        wav = os.path.splitext(path)[0] + ".wav"
+        if not os.path.exists(wav) or args.render:
+            print(f"rendering {path} ...")
+            render_midi_to_wav(path, wav)
+        path = wav
+
+    audio, sample_rate = load_wav(path)
+    duration = len(audio) / sample_rate
+    print(f"{path}  {duration:.1f}s")
+    with AudioPlayer(sample_rate=sample_rate, gain_db=args.gain, normalise=not args.no_normalise) as player:
+        player.play(audio)
+        try:
+            while player.elapsed < duration + 0.3:
+                time.sleep(0.2)
+        except KeyboardInterrupt:
+            print("\nstopped")
+    print("done")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="piano", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -427,6 +463,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_record.add_argument("--bpm", type=float, default=100.0, help="count-in tempo")
     p_record.add_argument("--out", default=None)
     p_record.set_defaults(func=cmd_record)
+
+    p_play = sub.add_parser("play", help="play a song, MIDI or WAV, out of the speakers")
+    p_play.add_argument("file")
+    p_play.add_argument("--render", action="store_true", help="render the MIDI again")
+    p_play.add_argument("--gain", type=float, default=12.0, help="extra gain in dB")
+    p_play.add_argument("--no-normalise", action="store_true")
+    p_play.set_defaults(func=cmd_play)
 
     p_demo = sub.add_parser("demo", help="run the self-test")
     p_demo.set_defaults(func=cmd_demo)
