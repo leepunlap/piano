@@ -1,0 +1,14 @@
+<!DOCTYPE html><html><body style="margin:0;background:#fff">
+<div id="c" style="width:900px"></div>
+<script type="module">
+import { renderScore } from "http://localhost:8765/vf.js";
+const doc = { key:"C", time:"4/4", systems:[{measures:[
+ {beats:4, notes:[
+   {key:"c/4",duration:"w",dotted:false,rest:false},
+ ]},
+ {beats:4, notes:[{key:"e/5",duration:"w",dotted:false,rest:false}]},
+ {beats:4, notes:[{key:"e/4",duration:"w",dotted:false,rest:false}]},
+ {beats:4, notes:[{key:"c/5",duration:"w",dotted:false,rest:false}]},
+]}]};
+await renderScore(doc, document.getElementById("c"), {width:900, barsPerLine:4});
+</script></body></html>

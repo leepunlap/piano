@@ -128,7 +128,7 @@ def song_page(song: dict, slug: str, audio_name: str | None) -> str:
         box = system["box"]
         width = max(1, box[2] - box[0])
         parts.append('<div class="system" data-page="%s" data-system="%d">' % (system["page"], system["system"]))
-        parts.append(f'<img src="strips/{system["image"]}" alt="system {system["system"]}">')
+        parts.append(f'<img src="strips/{slug}/{system["image"]}" alt="system {system["system"]}">')
         parts.append('<div class="hit"></div>')
         parts.append("</div>")
 
@@ -266,6 +266,10 @@ def main() -> int:
     strips_dir.mkdir(exist_ok=True)
     audio_dir = args.out / "audio"
     audio_dir.mkdir(exist_ok=True)
+    # The score data, so that the comparison page can draw the recognised
+    # notes as notation next to the printed page.
+    data_dir = args.out / "songs"
+    data_dir.mkdir(exist_ok=True)
 
     found: list[tuple[str, dict]] = []
     seen_pages: dict[str, str] = {}
@@ -276,11 +280,23 @@ def main() -> int:
         song = json.loads(path.read_text(encoding="utf-8"))
         found.append((slug, song))
 
+        # Each song's strips live in their own folder: the strip names are
+        # the same for every score (page-1-sys01.png), so a shared folder
+        # would show one song's music under another's name.
+        slug_strips = strips_dir / slug
+        slug_strips.mkdir(exist_ok=True)
         source_strips = args.songs / slug / "strips"
         for system in song.get("systems", []):
             src = source_strips / system["image"]
             if src.exists():
-                shutil.copy(src, strips_dir / system["image"])
+                shutil.copy(src, slug_strips / system["image"])
+
+        song_dir = data_dir / slug
+        song_dir.mkdir(exist_ok=True)
+        shutil.copy(path, song_dir / "song.json")
+        vf = args.songs / slug / "vf.json"
+        if vf.exists():
+            shutil.copy(vf, song_dir / "vf.json")
 
         audio_name = None
         wav = args.songs / slug / "song.wav"

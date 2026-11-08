@@ -1,0 +1,11 @@
+{
+  "name": "piano-vexflow",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "vexflow": "5.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.0"
+  }
+}

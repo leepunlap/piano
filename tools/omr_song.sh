@@ -17,3 +17,7 @@ done
 python3 "$ROOT/tools/build_song.py" "$SONG" \
   --pages "$PAGES" --prep "$WORK/prep" --omr "$WORK/omr1" --masked "$WORK/masked" \
   --strips "$WORK/strips" --out "$WORK/song.json"
+
+# The song as notation, so that it can be drawn next to the printed page and
+# the two compared.
+python3 "$ROOT/tools/song_to_vf.py" "$WORK/song.json" "$WORK/vf.json"

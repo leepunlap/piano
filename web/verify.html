@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>對照 · 辨識結果 vs 原譜</title>
+<style>
+  :root { --ink:#1a1a1a; --paper:#fff; --line:#d8d4cc; --muted:#6b6560; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#f4f2ee; color:var(--ink);
+         font-family: "PingFang TC", "Hiragino Sans", system-ui, sans-serif; }
+  header { padding:18px 22px 12px; border-bottom:1px solid var(--line); background:var(--paper); }
+  h1 { margin:0 0 4px; font-size:19px; }
+  p.lede { margin:0; color:var(--muted); font-size:13px; line-height:1.6; }
+  nav { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+  nav a { color:var(--ink); text-decoration:none; border:1px solid var(--line);
+          border-radius:999px; padding:5px 14px; font-size:13px; background:#fff; }
+  nav a.on { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+  main { padding:18px 22px 60px; max-width:1500px; }
+  section.pair { background:var(--paper); border:1px solid var(--line); border-radius:10px;
+                 margin-bottom:22px; overflow:hidden; }
+  .label { font-size:12px; color:var(--muted); padding:8px 14px 0; letter-spacing:.04em; }
+  .print { padding:6px 10px; border-bottom:1px dashed var(--line); }
+  .print img { width:100%; display:block; }
+  .drawn { padding:10px 10px 14px; }
+  .drawn svg { width:100%; height:auto; display:block; }
+  .syshead { font-size:13px; font-weight:600; padding:8px 14px; background:#faf9f6;
+             border-bottom:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <h1>對照 · 辨識結果 vs 原譜</h1>
+  <p class="lede">上面是印出來的譜，下面是用 VexFlow 重畫的辨識結果。兩者應該一樣；不一樣的地方就是還要修的地方。</p>
+  <nav id="nav"></nav>
+</header>
+<main id="main">載入中…</main>
+
+<script type="module">
+import { renderScore, loadJson } from "./vf.js";
+
+const params = new URLSearchParams(location.search);
+const only = params.get("song");
+
+const SONGS = ["besame", "yinxiang", "tieta", "chenmo"];
+const TITLES = {
+  besame: "Besame Mucho",
+  yinxiang: "印象",
+  tieta: "鐵塔凌雲",
+  chenmo: "沉默是金",
+};
+
+const nav = document.getElementById("nav");
+const main = document.getElementById("main");
+
+for (const song of SONGS) {
+  if (only && song !== only) continue;
+  const a = document.createElement("a");
+  a.href = `?song=${song}`;
+  a.textContent = TITLES[song] || song;
+  a.className = song === (only || SONGS[0]) ? "on" : "";
+  nav.appendChild(a);
+}
+
+async function show(song) {
+  main.innerHTML = "";
+  let doc;
+  try {
+    doc = await loadJson(`songs/${song}/vf.json`);
+  } catch (e) {
+    main.innerHTML = `<p style="color:#a00">讀不到 ${song} 的辨識結果：${e.message}</p>`;
+    return;
+  }
+  let songFile;
+  try {
+    songFile = await loadJson(`songs/${song}/song.json`);
+  } catch (e) {
+    songFile = { systems: [] };
+  }
+
+  const strips = songFile.systems.map((s) => s.image);
+  const systems = doc.systems || [];
+
+  for (let i = 0; i < systems.length; i++) {
+    const pair = document.createElement("section");
+    pair.className = "pair";
+
+    const head = document.createElement("div");
+    head.className = "syshead";
+    head.textContent = `第 ${i + 1} 行`;
+    pair.appendChild(head);
+
+    if (strips[i]) {
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = "原譜";
+      pair.appendChild(label);
+      const printed = document.createElement("div");
+      printed.className = "print";
+      const img = document.createElement("img");
+      img.src = `strips/${song}/${strips[i]}`;
+      img.alt = `printed system ${i + 1}`;
+      printed.appendChild(img);
+      pair.appendChild(printed);
+    }
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = "辨識結果（VexFlow 重畫）";
+    pair.appendChild(label);
+    const drawn = document.createElement("div");
+    drawn.className = "drawn";
+    pair.appendChild(drawn);
+    main.appendChild(pair);
+
+    await renderScore({ ...doc, systems: [systems[i]] }, drawn, { barsPerLine: 8 });
+  }
+}
+
+const first = only || SONGS[0];
+await show(first);
+</script>
+</body>
+</html>

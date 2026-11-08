@@ -94,7 +94,7 @@ def melody_events(song: dict) -> list[tuple[float, float, int, int]]:
         for note in system.get("notes", []):
             if note.get("rest"):
                 continue
-            midi = (note["octave"] + 1) * 12 + STEP_SEMITONE[note["pitch"]]
+            midi = (note["octave"] + 1) * 12 + STEP_SEMITONE[note["pitch"]] + note.get("alter", 0)
             out.append(
                 (
                     note.get("beat", 0.0),
@@ -127,11 +127,17 @@ def main() -> int:
     ap.add_argument("song", type=Path)
     ap.add_argument("out", type=Path)
     ap.add_argument("--chords", type=Path)
-    ap.add_argument("--bpm", type=float, default=84.0)
+    ap.add_argument(
+        "--bpm",
+        type=float,
+        default=None,
+        help="the tempo; by default the one printed on the score",
+    )
     args = ap.parse_args()
 
     song = json.loads(args.song.read_text(encoding="utf-8"))
-    chords = {}
+    # The song file normally carries its own chord symbols, already placed.
+    chords = song.get("chords", {})
     if args.chords and args.chords.exists():
         raw = json.loads(args.chords.read_text(encoding="utf-8"))
         if isinstance(raw, dict):
@@ -139,6 +145,9 @@ def main() -> int:
         else:
             # A flat list of symbols: place them with the song's own bars.
             chords = place_chords(song, raw)
+
+    if args.bpm is None:
+        args.bpm = float(song.get("bpm", 84.0))
 
     melody = melody_events(song)
     comps = chord_events(song, chords)

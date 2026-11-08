@@ -28,7 +28,19 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 
 from omr_bands import read_omr
+from omr_sheet import read_page as read_sheet
 from read_page import read_page
+
+# Audiveris names a note's length the way a font does; the song file names
+# it the way a musician does.
+DURATION_NAMES = {
+    "w": "whole",
+    "h": "half",
+    "q": "quarter",
+    "8": "eighth",
+    "16": "16th",
+    "32": "32nd",
+}
 
 
 def flatten(img: Image.Image) -> Image.Image:
@@ -117,11 +129,13 @@ def measure_notes(notes, barlines, staff, beats_per_measure: float, bar_offset: 
 def place_chords(song: dict, chords: list[dict]) -> dict:
     """Give every chord symbol its place in the song.
 
-    A chord symbol is printed at the point in the music where it changes, so
-    its place is found from the notes around it: the symbol belongs at the
-    time of the last note before it, or a little before the next one if there
-    is a gap.  That keeps the harmony in step with the melody, which is the
-    whole point of keeping it.
+    A chord symbol is printed above the music, at the point where the
+    harmony changes, so its place is found from the notes: the symbol belongs
+    to the first note at or after it.  A symbol printed over a bar of rests
+    therefore lands at the start of that bar, which is where it belongs.
+
+    The symbol's length runs to the next symbol, so that the harmony changes
+    when the music says it does and not when the next bar happens to start.
     """
     by_system: dict[tuple[str, int], list[dict]] = {}
     for chord in chords:
@@ -131,28 +145,38 @@ def place_chords(song: dict, chords: list[dict]) -> dict:
     for system in song.get("systems", []):
         key = (system["page"], int(system["system"]))
         items = by_system.get(key)
-        notes = [n for n in system.get("notes", []) if not n.get("rest")]
+        notes = system.get("notes", [])
         if not items or not notes:
             continue
-        entry: list[dict] = []
-        for chord in items:
+        events = sorted(notes, key=lambda n: n["x"])
+
+        placed = []
+        for chord in sorted(items, key=lambda c: c["x"]):
             x = chord["x"]
-            before = [n for n in notes if n["x"] <= x + 1]
-            after = [n for n in notes if n["x"] > x + 1]
-            if before:
-                beat = before[-1].get("beat", 0.0)
-            elif after:
-                beat = max(0.0, after[0].get("beat", 0.0) - 0.5)
+            after = [n for n in events if n["x"] >= x - 2]
+            if after:
+                beat = after[0].get("beat", 0.0)
             else:
-                beat = 0.0
-            # A symbol belongs at the start of the note it sits over.
-            if after and before:
-                gap = after[0]["x"] - before[-1]["x"]
-                if gap > 0:
-                    beat += 0.0
-            entry.append({"chord": chord["chord"], "beat": round(beat, 3), "beats": 4.0})
-        entry.sort(key=lambda c: c["beat"])
-        out[f"{system['page']}:{system['system']}"] = entry
+                beat = max(0.0, events[-1].get("beat", 0.0))
+            placed.append({"chord": chord["chord"], "beat": round(beat, 3), "end": None})
+
+        # Each symbol lasts until the next one.
+        for index, entry in enumerate(placed):
+            if index + 1 < len(placed):
+                entry["end"] = placed[index + 1]["beat"]
+            else:
+                entry["end"] = None
+
+        entry_list = []
+        for index, entry in enumerate(placed):
+            start = entry["beat"]
+            end = entry["end"]
+            if end is None:
+                following = [n for n in events if n.get("beat", 0.0) > start]
+                end = following[0].get("beat", start + 4.0) if following else start + 4.0
+            length = max(0.25, end - start)
+            entry_list.append({"chord": entry["chord"], "beat": start, "beats": round(length, 3)})
+        out[f"{system['page']}:{system['system']}"] = entry_list
     return out
 
 
@@ -167,18 +191,26 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--clef", default="treble")
     ap.add_argument("--beats", type=float, default=4.0)
+    ap.add_argument("--bpm", type=float, default=84.0, help="the tempo printed on the score")
     ap.add_argument("--chords", type=Path, help="JSON list of chord symbols to place")
     args = ap.parse_args()
 
     args.strips.mkdir(parents=True, exist_ok=True)
     pages = sorted(args.pages.glob("*.png"))
-    song = {"title": args.song, "clef": args.clef, "pages": [], "systems": []}
+    song = {
+        "title": args.song,
+        "clef": args.clef,
+        "bpm": args.bpm,
+        "pages": [],
+        "systems": [],
+    }
 
     # One of the scores was scanned with a page twice: the photograph of
     # 沉默是金's first page was inserted for both pages 54 and 55.  Reading
     # the same page twice would put the same bars in the song twice, so the
     # repeat is dropped.
     seen: dict[str, str] = {}
+    page_offset = 0.0
 
     for page in pages:
         name = page.stem
@@ -210,41 +242,53 @@ def main() -> int:
             entry["image"] = strip_path.name
 
         # The melody, read off the cleaned-up page.
-        ink = np.asarray(masked.convert("L")) < 128
-        read = read_page(ink, staves, systems, clef=args.clef)
-        bar_offset = 0
+        #
+        # The reading comes from Audiveris's own analysis, kept in the sheet
+        # XML inside the .omr file.  That analysis knows where every bar
+        # line, note head, rest and beam is, and in what order, and it knows
+        # the rhythm exactly; what it does not know is the note *name*, which
+        # is worked out here from the clef and the key signature.
+        read = read_sheet(omr_path)
+        # The beats run on from one page to the next, so that the whole
+        # piece is one continuous timeline.
         for entry in read:
-            staff = entry["staff"]
-            bars, bar_offset = measure_notes(
-                entry["notes"], entry["barlines"], staff, args.beats, bar_offset
-            )
+            for n in entry["notes"]:
+                n["beat"] = n["beat"] + page_offset
             strip_entry = next(s for s in strips if s["system"] == entry["system"])
+            # The beat of a note is its place in the bar, measured in whole
+            # notes by Audiveris, turned into quarter-note beats and run on
+            # from one system to the next.
+            notes = []
+            for n in entry["notes"]:
+                notes.append(
+                    {
+                        "x": n["x"],
+                        "beat": round(n["beat"], 4),
+                        "pitch": n["pitch"],
+                        "octave": n["octave"],
+                        "diatonic": n["diatonic"],
+                        "alter": n["alter"],
+                        "duration": DURATION_NAMES.get(n["duration"], n["duration"]),
+                        "beats": round(n["beats"], 4),
+                        "dotted": n["dotted"],
+                        "rest": n["rest"],
+                        "stem": 0,
+                        "beams": 0,
+                    }
+                )
             song["systems"].append(
                 {
                     "system": entry["system"],
                     "page": name,
                     "image": strip_entry["image"],
                     "box": strip_entry["box"],
-                    "notes": [
-                        {
-                            "x": n.x,
-                            "beat": round(getattr(n, "beat", 0.0), 4),
-                            "pitch": n.letter,
-                            "octave": n.octave,
-                            "diatonic": n.diatonic,
-                            "duration": n.duration,
-                            "beats": n.beats,
-                            "dotted": n.dotted,
-                            "rest": n.rest,
-                            "stem": n.stem,
-                            "beams": n.beams,
-                        }
-                        for n in entry["notes"]
-                    ],
+                    "notes": notes,
                     "barlines": entry["barlines"],
                 }
             )
             song["pages"].append({"page": name, "system": entry["system"]})
+        if read and read[-1]["notes"]:
+            page_offset = max(n["beat"] + n["beats"] for n in read[-1]["notes"])
         print(f"{name}: {len(read)} systems, {sum(len(e['notes']) for e in read)} notes")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -5,3 +5,7 @@ tools/Audiveris.app/
 tools/tessdata/
 songs/
 samples/
+
+# The VexFlow build is copied into the site; it is fetched with pnpm.
+web/vendor/
+tools/vf/node_modules/
