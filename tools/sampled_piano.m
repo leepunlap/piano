@@ -31,9 +31,6 @@
 static sfizz_synth_t *gSynth = NULL;
 static pthread_mutex_t gLock = PTHREAD_MUTEX_INITIALIZER;
 static int gBlockSize = 512;
-static float *gLeft = NULL;      // the synth's output, one plane per channel
-static float *gRight = NULL;
-
 // A queue of rendered audio.
 //
 // The synth renders whole blocks of its own size; the audio unit asks for
@@ -130,7 +127,7 @@ static OSStatus renderCallback(void *refCon,
                                 AudioBufferList *ioData) {
     (void)refCon; (void)ioActionFlags; (void)inTimeStamp; (void)inBusNumber;
 
-    if (ioData->mNumberBuffers < 1 || gLeft == NULL) return noErr;
+    if (ioData->mNumberBuffers < 1 || qLeft == NULL) return noErr;
 
     pthread_mutex_lock(&gLock);
 
@@ -153,8 +150,8 @@ static OSStatus renderCallback(void *refCon,
         // The queue wraps: the read counter runs on for ever, but the blocks
         // it points at are taken modulo the size of the queue.
         int block = (qRead / gBlockSize) % QUEUE_BLOCKS;
-        outLeft[i] = limit(gLeft[(size_t)block * gBlockSize + offset] * gVolume);
-        outRight[i] = limit(gRight[(size_t)block * gBlockSize + offset] * gVolume);
+        outLeft[i] = limit(qLeft[(size_t)block * gBlockSize + offset] * gVolume);
+        outRight[i] = limit(qRight[(size_t)block * gBlockSize + offset] * gVolume);
         float value = fabsf(outLeft[i]);
         if (value > gPeak) gPeak = value;
         qRead++;
@@ -344,8 +341,6 @@ int main(int argc, const char *argv[]) {
             gTap = fopen(tapPath, "wb");
             printf("tapping the audio to %s\n", tapPath);
         }
-        gLeft = (float *)calloc((size_t)gBlockSize * 8, sizeof(float));
-        gRight = (float *)calloc((size_t)gBlockSize * 8, sizeof(float));
         qLeft = (float *)calloc((size_t)gBlockSize * QUEUE_BLOCKS, sizeof(float));
         qRight = (float *)calloc((size_t)gBlockSize * QUEUE_BLOCKS, sizeof(float));
         if (setupAudio(48000) != 0) return 1;

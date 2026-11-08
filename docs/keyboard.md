@@ -16,39 +16,37 @@ that was switched off — volume, headphone mute, layer faders, a MIDI Out
 menu.  None of that applies here: there is nothing in the instrument to
 unmute.
 
-## The MIDI link is unreliable
+## The MIDI link
 
-The USB device enumerates reliably and CoreMIDI binds to its ports, but the
-data path is intermittent:
+The USB device enumerates reliably and CoreMIDI binds to its ports, and the
+data comes through.
 
-| | |
-|---|---|
-| USB enumeration | always there — three `IOUSBHostDevice` entries |
-| CoreMIDI ports | `X8III MidiOut` and `X8III Port 2`, enumerated live |
-| MIDI data | **nothing**, through rtmidi's callback, rtmidi on the second port, mido's polling, and CoreMIDI's own block API — all four at once |
-| Once worked | 208 notes were captured in a single session, then it stopped again with no change on this side |
+It used not to, and the reason was two things rather than one.
 
-A device that enumerates but does not deliver, and that works for a while and
-then does not, is a physical link: the cable, the port, or the bus-powered
-interface itself.  A charge-only USB cable is the exact match for the
-symptom — the device enumerates and the names are right, and no data ever
-arrives.
+**The cable.** The device enumerates and the names are right, but no data
+arrives — through rtmidi's callback, through rtmidi on the second port,
+through mido's polling, through CoreMIDI's own block API, all at once.
+A charge-only USB cable is the exact match for that symptom: the device
+appears and exposes no data endpoints.  A different cable and a different
+port fixed it.
 
-So, in order:
+**One connection at a time.** The X8III's interface serves a single
+connection to `X8III MidiOut`.  While `Sampled Piano` was running, a
+separate logger on the same port received *nothing* while the app went on
+receiving notes — 253 of them, with the logger attached.  So a logger
+running alongside the app does not observe the keyboard; it locks the app
+out of it.  That is what made the link look intermittent for a long time:
+every diagnostic run stole the connection from the thing being diagnosed.
 
-1. Unplug the cable and wait ten seconds before plugging it back in.  The
-   controller is bus-powered, so that is a real power cycle of the interface.
-2. A different USB port, directly on the machine rather than through a hub.
-3. A different cable — and one known to carry data.
+Only one thing at a time may listen to `X8III MidiOut`.
 
 ## Watching the link
 
     python3 -m piano.cli monitor
 
 prints every message as it arrives, so whether the link is alive can be
-seen directly rather than inferred.  The same thing is available as a
-logger that writes to a file, for when the question is "did anything arrive
-in the last three minutes".
+seen directly rather than inferred.  Run it *instead of* the app, not
+alongside it.
 
 ## Playing it
 
