@@ -20,6 +20,7 @@ mkdir -p "$DEST/Contents/MacOS" "$DEST/Contents/Resources"
 clang -arch x86_64 -fobjc-arc -O2 \
   -framework Foundation -framework CoreMIDI -framework CoreAudio -framework AudioToolbox \
   -I "$ROOT/bin/include" -L "$ROOT/bin/lib" -lsfizz -rpath "$ROOT/bin/lib" \
+  -DREPO_ROOT="\"$ROOT\"" \
   -o "$DEST/Contents/MacOS/Sampled Piano" "$ROOT/tools/sampled_piano.m"
 
 cat > "$DEST/Contents/Info.plist" <<'PLIST'

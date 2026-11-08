@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
+#include <mach-o/dyld.h>
 #include "sfizz.h"
 
 static sfizz_synth_t *gSynth = NULL;
@@ -311,7 +313,11 @@ int main(int argc, const char *argv[]) {
     @autoreleasepool {
         int lock = claimTheKeyboard();
         if (lock < 0) return 1;
-        const char *sfzPath = "/Users/blee/src/piano/samples/SalamanderGrandPiano/Salamander Grand Piano V3.sfz";
+
+#ifndef REPO_ROOT
+#define REPO_ROOT "/Users/blee/src/piano"
+#endif
+        const char *sfzPath = REPO_ROOT "/samples/SalamanderGrandPiano/Salamander Grand Piano V3.sfz";
         const char *wanted = NULL;
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
