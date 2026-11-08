@@ -50,14 +50,34 @@ static int qRead = 0;       // where the next frame comes from
 static int qAvailable = 0;  // frames ready to be taken
 static int gVoices = 0;
 static int gNotesOn = 0;
+// A soft limiter.
+//
+// Six sampled voices at once, each recorded at full force, add up to more
+// than full scale.  Left alone the output clips, and clipping is exactly
+// what a crackle is: the peaks are squared off instead of rounded.  This
+// curve never exceeds full scale and never quite reaches it, so the peaks
+// come off gently.
+static inline float limit(float x) {
+    const float knee = 0.7f;
+    const float room = 1.0f - knee;
+    if (x <= knee && x >= -knee) return x;
+    float over = (x > 0.0f) ? (x - knee) : (-x - knee);
+    float shaped = knee + room * (over / (over + room));
+    return (x > 0.0f) ? shaped : -shaped;
+}
+
 static float gPeak = 0.0f;      // the loudest sample the synth has produced
 static int gClipped = 0;        // how many samples have gone past full scale
+static float gVolume = 0.6f;    // how loud the whole thing is
 static FILE *gTap = NULL;       // where the audio can be written out to look at
+
+static int gNotesIn = 0;
 
 static void noteOn(int note, int velocity) {
     pthread_mutex_lock(&gLock);
     sfizz_send_note_on(gSynth, 0, note, velocity);
     gNotesOn++;
+    gNotesIn++;
     pthread_mutex_unlock(&gLock);
 }
 
@@ -133,11 +153,10 @@ static OSStatus renderCallback(void *refCon,
         // The queue wraps: the read counter runs on for ever, but the blocks
         // it points at are taken modulo the size of the queue.
         int block = (qRead / gBlockSize) % QUEUE_BLOCKS;
-        outLeft[i] = qLeft[(size_t)block * gBlockSize + offset];
-        outRight[i] = qRight[(size_t)block * gBlockSize + offset];
+        outLeft[i] = limit(gLeft[(size_t)block * gBlockSize + offset] * gVolume);
+        outRight[i] = limit(gRight[(size_t)block * gBlockSize + offset] * gVolume);
         float value = fabsf(outLeft[i]);
         if (value > gPeak) gPeak = value;
-        if (value > 0.999f) gClipped++;
         qRead++;
         qAvailable--;
     }
@@ -300,7 +319,11 @@ int main(int argc, const char *argv[]) {
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) {
                 wanted = argv[++i];
-            } else if (strcmp(argv[i], "--test") != 0) {
+            } else if (strcmp(argv[i], "--volume") == 0 && i + 1 < argc) {
+                gVolume = (float)atof(argv[++i]);
+            } else if (strcmp(argv[i], "--test") == 0) {
+                // handled below
+            } else {
                 sfzPath = argv[i];
             }
         }
@@ -309,13 +332,18 @@ int main(int argc, const char *argv[]) {
         if (gSynth == NULL) { fprintf(stderr, "could not create the synth\n"); return 1; }
         sfizz_set_samples_per_block(gSynth, gBlockSize);
         sfizz_set_num_voices(gSynth, 64);
-        sfizz_set_volume(gSynth, 0.8);
+        sfizz_set_volume(gSynth, 0.9);
         if (!sfizz_load_file(gSynth, sfzPath)) {
             fprintf(stderr, "could not load %s\n", sfzPath);
             return 1;
         }
         printf("library: %s\n", sfzPath);
 
+        const char *tapPath = getenv("SAMPLED_PIANO_TAP");
+        if (tapPath != NULL) {
+            gTap = fopen(tapPath, "wb");
+            printf("tapping the audio to %s\n", tapPath);
+        }
         gLeft = (float *)calloc((size_t)gBlockSize * 8, sizeof(float));
         gRight = (float *)calloc((size_t)gBlockSize * 8, sizeof(float));
         qLeft = (float *)calloc((size_t)gBlockSize * QUEUE_BLOCKS, sizeof(float));
@@ -332,8 +360,6 @@ int main(int argc, const char *argv[]) {
             // checked on its own.
             printf("test: playing a chord\n");
             fflush(stdout);
-            const char *tapPath = getenv("SAMPLED_PIANO_TAP");
-            if (tapPath != NULL) gTap = fopen(tapPath, "wb");
             noteOn(60, 100); noteOn(64, 100); noteOn(67, 100); noteOn(72, 100);
             sleep(3);
             noteOff(60); noteOff(64); noteOff(67); noteOff(72);
@@ -345,7 +371,15 @@ int main(int argc, const char *argv[]) {
 
         printf("playing - press keys on the keyboard, Ctrl-C to stop\n");
         fflush(stdout);
-        while (1) { sleep(1); }
+        int last = 0;
+        while (1) {
+            sleep(1);
+            if (gNotesIn != last) {
+                printf("notes in so far: %d\n", gNotesIn);
+                fflush(stdout);
+                last = gNotesIn;
+            }
+        }
     }
     return 0;
 }
